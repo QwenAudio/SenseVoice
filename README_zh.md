@@ -421,6 +421,7 @@ python webui.py
 
 - 本仓库源码采用 [MIT License](./LICENSE)。
 - 模型权重单独发布，并以各模型卡标注的条款为准。官方 [SenseVoiceSmall 模型卡](https://huggingface.co/FunAudioLLM/SenseVoiceSmall) 链接至 [FunASR 模型开源协议](https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE)；其他制品和转换版本可能标注不同条款，使用前请核对对应模型卡。
+- 维护者已针对 [FunASR 模型开源协议 v1.1](https://github.com/modelscope/FunASR/blob/58830eca4012644aac0c3218c3ccc7d98f003fda/MODEL_LICENSE) 发布 [SenseVoiceSmall 官方许可澄清](https://github.com/QwenAudio/SenseVoice/issues/334#issuecomment-5083546605)：遵守模型协议时，允许商业使用官方 SenseVoiceSmall 权重；第 3 节属于责任和风险免责声明，不构成额外的“禁止商用”限制；微调后的衍生权重可以保持私有。使用、复制、修改或分享模型时，仍需遵守第 2.2 节的署名和模型名称要求。此澄清仅适用于官方权重，第三方转换版本和打包制品仍需分别核对其条款。
 
 # 联系我们
 
