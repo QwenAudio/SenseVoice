@@ -411,6 +411,7 @@ python webui.py
 
 - Triton（GPU）部署最佳实践，triton + tensorrt，fp32 测试，V100 GPU 上加速比 526，fp16 支持中，[repo](https://github.com/modelscope/FunASR/blob/main/runtime/triton_gpu/README.md)
 - sherpa-onnx 部署最佳实践，支持在 10 种编程语言里面使用 SenseVoice, 即 C++, C, Python, C#, Go, Swift, Kotlin, Java, JavaScript, Dart. 支持在 iOS, Android, Raspberry Pi 等平台使用 SenseVoice，[repo](https://k2-fsa.github.io/sherpa/onnx/sense-voice/index.html)
+- [Orca](https://github.com/stablyai/orca) 已通过 sherpa-onnx 集成 SenseVoice 本地离线语音识别，支持在 macOS、Linux 和 Windows 上自动识别中文、英文、日文、韩文和粤语。该集成已在 [#7436](https://github.com/stablyai/orca/pull/7436) 合并，当前可通过 [v1.4.159-rc.1 预发布版](https://github.com/stablyai/orca/releases/tag/v1.4.159-rc.1) 使用；Orca v1.4.158 稳定版发布早于本次集成。
 - [SenseVoice.cpp](https://github.com/lovemefan/SenseVoice.cpp) 基于GGML，在纯C/C++中推断SenseVoice，支持3位、4位、5位、8位量化等，无需第三方依赖。
 - [流式SenseVoice](https://github.com/pengzhendong/streaming-sensevoice)，通过分块（chunk）的方式进行推理，为了实现伪流式处理，采用了截断注意力机制（truncated attention），牺牲了部分精度。此外，该技术还支持CTC前缀束搜索（CTC prefix beam search）以及热词增强功能。
 - [OmniSenseVoice](https://github.com/lifeiteng/OmniSenseVoice) 轻量化推理库，支持batch推理。

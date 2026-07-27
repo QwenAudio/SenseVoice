@@ -62,6 +62,23 @@ def test_readmes_surface_funasr_1329_vad_sentence_timestamps():
             assert marker in text, f"{relpath} is missing {marker}"
 
 
+def test_readmes_surface_orca_sensevoice_desktop_integration():
+    required_links = [
+        "https://github.com/stablyai/orca",
+        "https://github.com/stablyai/orca/pull/7436",
+        "https://github.com/stablyai/orca/releases/tag/v1.4.159-rc.1",
+    ]
+    prerelease_markers = {
+        "README.md": "prerelease",
+        "README_zh.md": "预发布",
+        "README_ja.md": "プレリリース",
+    }
+    for relpath, prerelease_marker in prerelease_markers.items():
+        text = (ROOT / relpath).read_text()
+        for marker in ["Orca", "SenseVoice", *required_links, prerelease_marker]:
+            assert marker in text, f"{relpath} is missing {marker}"
+
+
 def test_readme_relative_markdown_links_point_to_existing_files():
     link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
     for relpath in ["README.md", "README_zh.md"]:
