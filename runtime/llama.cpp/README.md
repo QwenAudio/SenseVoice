@@ -73,6 +73,15 @@ python runtime/llama.cpp/export_sensevoice_gguf.py --wtype f16 \
     --out sensevoice-small-f16.gguf                       # half size
 ```
 
+To make the GGUF directly loadable by audio.cpp's spec-backed runtime, pass a
+`sense_asr` schema-v1 model specification during export:
+```bash
+python runtime/llama.cpp/export_sensevoice_gguf.py --wtype q8_0 \
+    --model_pt <model>/model.pt --mvn <model>/am.mvn \
+    --model-spec model_specs/sense_asr.json \
+    --out sensevoice-small-q8-audiocpp-v1.gguf
+```
+
 **3. Transcribe:**
 ```bash
 build/bin/llama-funasr-sensevoice -m sensevoice-small.gguf -a audio.wav   # prints transcription text

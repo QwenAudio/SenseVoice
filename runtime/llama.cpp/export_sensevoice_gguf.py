@@ -3,7 +3,7 @@
 for the ggml C++ runtime. The encoder is the same SAN-M architecture as
 Fun-ASR-Nano, so the C++ forward is shared.
 """
-import argparse, os, re
+import argparse, json, os, re
 import numpy as np, torch, gguf
 
 
@@ -17,6 +17,16 @@ def parse_mvn(path):
     return shift, scale
 
 
+def load_audio_cpp_model_spec(path):
+    with open(path, encoding="utf-8") as spec_file:
+        model_spec = json.load(spec_file)
+    if model_spec.get("schema_version") != 1:
+        raise ValueError("--model-spec must use schema version 1")
+    if model_spec.get("family") != "sense_asr":
+        raise ValueError("--model-spec family must be sense_asr")
+    return json.dumps(model_spec, ensure_ascii=False, separators=(",", ":"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model_pt", required=True)
@@ -24,8 +34,14 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--wtype", default="f32", choices=["f32", "f16", "q8_0"])
     ap.add_argument("--spm", default=None, help="sentencepiece .bpe.model; default: next to model_pt")
+    ap.add_argument(
+        "--model-spec",
+        default=None,
+        help="optional audio.cpp schema-v1 model spec JSON to embed",
+    )
     args = ap.parse_args()
 
+    model_spec_json = load_audio_cpp_model_spec(args.model_spec) if args.model_spec else None
     sd = torch.load(args.model_pt, map_location="cpu"); sd = sd.get("state_dict", sd)
     w = gguf.GGUFWriter(args.out, "sensevoice-small")
     w.add_uint32("sv.input_size", 560)
@@ -36,6 +52,11 @@ def main():
     w.add_uint32("sv.kernel_size", 11)
     w.add_uint32("sv.vocab_size", 25055)
     w.add_uint32("sv.blank_id", 0)
+    if model_spec_json:
+        w.add_uint32("audiocpp.model_spec.version", 1)
+        w.add_string("audiocpp.model_spec.family", "sense_asr")
+        w.add_string("audiocpp.model_spec.json", model_spec_json)
+        print(f"embedded audio.cpp model spec from {args.model_spec}")
     # query token embed indices used at inference: [lid(auto=0), 1, 2, textnorm(woitn=15)]
     w.add_array("sv.query_tokens", [0, 1, 2, 14])  # 14=withitn (use_itn=True), matches authoritative
     import glob
