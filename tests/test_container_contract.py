@@ -39,15 +39,24 @@ class ContainerContractTest(unittest.TestCase):
             workflow,
         )
 
-    def test_readme_uses_public_ghcr_image_and_real_service_port(self):
+    def test_readme_uses_real_service_port_and_no_retired_registry(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
-        self.assertIn("ghcr.io/qwenaudio/sensevoice", readme.lower())
         self.assertIn("-p 50000:50000", readme)
         self.assertNotIn(
             "registry.cn-hangzhou.aliyuncs.com/funasr/sensevoice",
             readme,
         )
+
+    def test_readmes_do_not_offer_private_ghcr_image_as_anonymous_pull(self):
+        for name in ("README.md", "README_zh.md"):
+            readme = (ROOT / name).read_text(encoding="utf-8").lower()
+
+            self.assertNotIn(
+                "docker pull ghcr.io/qwenaudio/sensevoice:latest",
+                readme,
+            )
+            self.assertIn("docker build -t sensevoice .", readme)
 
 
 if __name__ == "__main__":
