@@ -274,19 +274,29 @@ export SENSEVOICE_DEVICE=cuda:0
 fastapi run --port 50000
 ```
 
-### Docker 官方镜像
-
-官方 `linux/amd64` 运行时镜像发布在 GitHub Container Registry。镜像不内置模型权重；首次启动会把权重下载到挂载的 `/models` 缓存。
+### 使用 Docker 构建
 
 ```bash
-docker pull ghcr.io/qwenaudio/sensevoice:latest
-docker run --rm --gpus all \
-  -p 50000:50000 \
-  -v sensevoice-models:/models \
-  ghcr.io/qwenaudio/sensevoice:latest
+docker build -t sensevoice .
 ```
 
-容器健康后访问 `http://127.0.0.1:50000/docs`。版本 tag 和不可变的 `sha-<commit>` tag 见 [容器包页面](https://github.com/QwenAudio/SenseVoice/pkgs/container/sensevoice)。CPU 模式增加 `-e SENSEVOICE_DEVICE=cpu` 并移除 `--gpus all`。
+> 构建工作流也会发布 `ghcr.io/qwenaudio/sensevoice`，但该容器包当前为
+> private，匿名拉取会返回 HTTP 401。在[容器包页面](https://github.com/QwenAudio/SenseVoice/pkgs/container/sensevoice)
+> 显示 Public 之前，请使用上面的本地构建。
+
+### 运行（GPU，默认）
+
+```bash
+docker run --rm --gpus all -p 50000:50000 -v sensevoice-models:/models sensevoice
+```
+
+### 运行（仅 CPU）
+
+```bash
+docker run --rm -e SENSEVOICE_DEVICE=cpu -p 50000:50000 -v sensevoice-models:/models sensevoice
+```
+
+容器健康后访问 `http://127.0.0.1:50000/docs`。
 
 ## 微调
 
