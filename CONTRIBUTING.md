@@ -66,6 +66,15 @@ fastapi run --port 50000
 3. Include your environment details (OS, Python version, PyTorch version, GPU, CUDA version).
 4. Provide a minimal code sample to reproduce the issue.
 
+### Resolving Issues
+
+A merged pull request, a green `main` branch, or an available release does not by itself prove that a reported problem is resolved. Keep user-reported issues open until either:
+
+- the reporter confirms the fix on the affected workflow; or
+- a maintainer reproduces the original failure, verifies the fix in a publicly available version, records the evidence in the issue, and allows a reasonable feedback window.
+
+When a fix needs a release, link the released version and ask the reporter to retest before closing. Use a waiting-for-feedback label when available instead of treating silence as confirmation.
+
 ### Submitting Pull Requests
 
 1. **Fork the repository** and create a new branch from `main`:
