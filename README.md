@@ -303,6 +303,20 @@ pip3 install -e ./
 
 SenseVoice can be built and run using Docker to simplify setup, ensure reproducibility, and support both CPU and GPU inference.
 
+### Official image
+
+The official `linux/amd64` runtime image is published to GitHub Container Registry. Model weights are not embedded in the image; they are downloaded into the mounted `/models` cache on first start.
+
+```bash
+docker pull ghcr.io/qwenaudio/sensevoice:latest
+docker run --rm --gpus all \
+  -p 50000:50000 \
+  -v sensevoice-models:/models \
+  ghcr.io/qwenaudio/sensevoice:latest
+```
+
+Open `http://127.0.0.1:50000/docs` after the container becomes healthy. Release tags and immutable `sha-<commit>` tags are available in the [container package](https://github.com/QwenAudio/SenseVoice/pkgs/container/sensevoice).
+
 ### Build with Docker
 ```bash
 docker build -t sensevoice .
@@ -314,7 +328,7 @@ docker run --gpus all -p 50000:50000 sensevoice
 ```
 ### Run (CPU-only)
 ```bash
-docker run -e SENSEVOICE_DEVICE=cpu -p 50000:50000 sensevoice
+docker run --rm -e SENSEVOICE_DEVICE=cpu -p 50000:50000 -v sensevoice-models:/models ghcr.io/qwenaudio/sensevoice:latest
 ```
 ### Docker Compose
 Docker Compose provides an easier way to run SenseVoice with persistent model caching, networking etc. 
