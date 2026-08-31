@@ -115,7 +115,7 @@ SenseVoiceSmall 示例与 FunASR 组合说话人分离路径需要 `funasr>=1.3.
 
 ### 使用 funasr 推理
 
-支持任意格式音频输入，支持任意时长输入
+支持常见格式音频输入。长录音必须先分段再送入编码器；下例使用 FSMN-VAD 完成分段。
 
 ```python
 from funasr import AutoModel
@@ -161,6 +161,25 @@ print(text)
 - `ban_emo_unk`：禁用 emo_unk 标签，禁用后所有的句子都会被赋与情感标签。默认 `False`
 
 </details>
+
+### 不使用 VAD 的长音频推理
+
+把一小时波形直接传给一次 `model.generate` 会使编码器内存远大于音频文件本身。
+当业务不能接受 VAD 时，可使用有界内存参考脚本。它通过 ffmpeg 解码，以默认 30 秒
+窗口和 2 秒重叠调用 SenseVoice，并且不会配置 VAD 模型：
+
+```bash
+python long_audio_no_vad.py meeting.mp3 \
+  --output meeting.txt \
+  --window-seconds 30 \
+  --overlap-seconds 2
+```
+
+合并文本只删除相邻窗口边界处完全相同的重复文字。`meeting.chunks.jsonl` 会保留每个
+窗口的原始模型输出和窗口偏移，因此不匹配的内容不会被静默丢弃；传入 `--no-dedupe`
+可连完全匹配的去重也关闭。窗口偏移是输入窗口边界，并非逐词时间戳。此路径避免把
+整段录音送入编码器造成 OOM，但固定切点仍可能影响边界附近的识别；业务允许按内容
+分段时，仍推荐使用上面的 VAD pipeline。
 
 如果输入均为短音频（小于 30s），并且需要批量化推理，为了加快推理效率，可以移除 vad 模型，并设置 `batch_size`
 

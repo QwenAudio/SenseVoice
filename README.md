@@ -110,7 +110,8 @@ SenseVoiceSmall examples and the composed FunASR diarization path require `funas
 
 ## Inference
 
-Supports input of audio in any format and of any duration.
+Supports common audio formats. Long recordings must be segmented before they are
+sent to the encoder; the example below uses FSMN-VAD for that segmentation.
 
 ```python
 from funasr import AutoModel
@@ -155,6 +156,29 @@ print(text)
 - `merge_vad`: Whether to merge short audio fragments segmented by the VAD model, with the merged length being `merge_length_s`, in seconds (s).
 - `ban_emo_unk`: Whether to ban the output of the `emo_unk` token.
 </details>
+
+### Long audio without VAD
+
+Passing an hour-long waveform to one `model.generate` call can make encoder
+memory grow far beyond the audio file size. When VAD is not acceptable, use the
+bounded-memory reference script instead. It decodes through ffmpeg, runs
+SenseVoice on fixed 30-second windows with 2 seconds of overlap, and does not
+configure a VAD model:
+
+```bash
+python long_audio_no_vad.py meeting.mp3 \
+  --output meeting.txt \
+  --window-seconds 30 \
+  --overlap-seconds 2
+```
+
+The merged transcript removes only exact text repeated across adjacent window
+boundaries. `meeting.chunks.jsonl` retains every raw model response and window
+offset, so nonmatching output is never silently discarded; pass `--no-dedupe`
+to disable even exact-overlap removal. Window offsets describe input boundaries,
+not word timestamps. This path avoids whole-recording encoder OOM, but fixed
+boundaries can still change recognition around a cut. The VAD pipeline above
+remains the recommended default when content-based segmentation is acceptable.
 
 ### Speaker Diarization
 
