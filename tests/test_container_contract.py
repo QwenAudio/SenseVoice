@@ -49,7 +49,7 @@ class ContainerContractTest(unittest.TestCase):
         )
 
     def test_readmes_do_not_offer_private_ghcr_image_as_anonymous_pull(self):
-        for name in ("README.md", "README_zh.md"):
+        for name in ("README.md", "README_zh.md", "README_ja.md"):
             readme = (ROOT / name).read_text(encoding="utf-8").lower()
 
             self.assertNotIn(
