@@ -18,7 +18,9 @@ services:
       options:
         max-size: "5m"
         max-file: "3"
-    gpus: all
+    # No GPU reservation. A default one makes `docker compose up` fail on
+    # hosts without the NVIDIA runtime, which is the CPU path from issue 339.
+    # GPU users should use `docker run --gpus all`.
 
 volumes:
   sensevoice-models:

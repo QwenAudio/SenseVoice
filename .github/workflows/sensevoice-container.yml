@@ -4,11 +4,18 @@ on:
   pull_request:
     paths:
       - Dockerfile
+      - docker-compose.yaml
       - requirements.txt
       - api.py
       - model.py
+      - utils/device_env.py
+      - README.md
+      - README_zh.md
+      - README_ja.md
+      - CONTRIBUTING.md
       - .github/workflows/sensevoice-container.yml
       - tests/test_container_contract.py
+      - tests/test_device_env.py
   push:
     branches:
       - main
@@ -16,11 +23,18 @@ on:
       - "v*"
     paths:
       - Dockerfile
+      - docker-compose.yaml
       - requirements.txt
       - api.py
       - model.py
+      - utils/device_env.py
+      - README.md
+      - README_zh.md
+      - README_ja.md
+      - CONTRIBUTING.md
       - .github/workflows/sensevoice-container.yml
       - tests/test_container_contract.py
+      - tests/test_device_env.py
   workflow_dispatch:
 
 permissions:
@@ -37,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate container contract
-        run: python -m unittest tests.test_container_contract
+        run: python -m unittest tests.test_container_contract tests.test_device_env
 
   build:
     needs: contract

@@ -145,11 +145,13 @@ You can also run SenseVoice using Docker:
 docker build -t sensevoice .
 
 # Run with GPU
-docker run --gpus all -p 50000:50000 sensevoice
+docker run --rm --gpus all -p 50000:50000 -v sensevoice-models:/models sensevoice
 
 # Run on CPU
-docker run -e SENSEVOICE_DEVICE=cpu -p 50000:50000 sensevoice
+docker run --rm -e SENSEVOICE_DEVICE=cpu -p 50000:50000 -v sensevoice-models:/models sensevoice
 ```
+
+Do not advertise `docker pull` for `ghcr.io/qwenaudio/sensevoice` or the old Aliyun registry while those paths return HTTP 401 for anonymous clients. Port is 50000, not 60001.
 
 ## Questions?
 

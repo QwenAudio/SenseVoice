@@ -339,18 +339,22 @@ docker build -t sensevoice .
 
 ### Run (GPU – default)
 ```bash
-docker run --gpus all -p 50000:50000 sensevoice
+docker run --rm --gpus all -p 50000:50000 -v sensevoice-models:/models sensevoice
 ```
 ### Run (CPU-only)
 ```bash
 docker run --rm -e SENSEVOICE_DEVICE=cpu -p 50000:50000 -v sensevoice-models:/models sensevoice
 ```
+
+The container listens on port 50000. After it is healthy, open `http://127.0.0.1:50000/docs`.
+
 ### Docker Compose
-Docker Compose provides an easier way to run SenseVoice with persistent model caching, networking etc. 
+Docker Compose builds the same image and keeps the model cache on the `sensevoice-models` volume. The default compose file does not request GPUs, so it starts on CPU hosts. For GPU, use the `docker run --gpus all` command above.
 
 ### Start Stack
 ```bash
 docker compose up --build
+# CPU is the default. Equivalent: SENSEVOICE_DEVICE=cpu docker compose up --build
 ```
 ### Data prepare
 

@@ -43,9 +43,41 @@ class ContainerContractTest(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
         self.assertIn("-p 50000:50000", readme)
+        self.assertNotIn("60001", readme)
         self.assertNotIn(
             "registry.cn-hangzhou.aliyuncs.com/funasr/sensevoice",
             readme,
+        )
+
+    def test_verified_docker_run_is_identical_across_docs(self):
+        gpu = (
+            "docker run --rm --gpus all -p 50000:50000 "
+            "-v sensevoice-models:/models sensevoice"
+        )
+        cpu = (
+            "docker run --rm -e SENSEVOICE_DEVICE=cpu -p 50000:50000 "
+            "-v sensevoice-models:/models sensevoice"
+        )
+        for name in ("README.md", "README_zh.md", "README_ja.md", "CONTRIBUTING.md"):
+            text = (ROOT / name).read_text(encoding="utf-8")
+            self.assertIn(gpu, text, msg=name)
+            if name != "README_ja.md":
+                self.assertIn(cpu, text, msg=name)
+
+    def test_default_compose_starts_without_a_gpu_reservation(self):
+        compose = (ROOT / "docker-compose.yaml").read_text(encoding="utf-8")
+
+        self.assertIn("50000:50000", compose)
+        self.assertIn("sensevoice-models:/models", compose)
+        self.assertNotIn("gpus:", compose)
+
+    def test_api_uses_resolved_device_not_raw_auto(self):
+        api = (ROOT / "api.py").read_text(encoding="utf-8")
+
+        self.assertIn("resolve_sensevoice_device()", api)
+        self.assertNotIn(
+            'SenseVoiceSmall.from_pretrained(model=model_dir, device=os.getenv("SENSEVOICE_DEVICE", "cuda:0"))',
+            api,
         )
 
     def test_readmes_do_not_offer_private_ghcr_image_as_anonymous_pull(self):

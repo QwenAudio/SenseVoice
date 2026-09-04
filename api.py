@@ -1,7 +1,7 @@
 # Set the device with environment, default is cuda:0
 # export SENSEVOICE_DEVICE=cuda:1
 
-import os, re
+import re
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import HTMLResponse
 from typing_extensions import Annotated
@@ -11,6 +11,7 @@ import torchaudio
 from model import SenseVoiceSmall
 from funasr.utils.postprocess_utils import rich_transcription_postprocess
 from io import BytesIO
+from utils.device_env import resolve_sensevoice_device
 
 TARGET_FS = 16000
 
@@ -26,7 +27,9 @@ class Language(str, Enum):
 
 
 model_dir = "iic/SenseVoiceSmall"
-m, kwargs = SenseVoiceSmall.from_pretrained(model=model_dir, device=os.getenv("SENSEVOICE_DEVICE", "cuda:0"))
+m, kwargs = SenseVoiceSmall.from_pretrained(
+    model=model_dir, device=resolve_sensevoice_device()
+)
 m.eval()
 
 regex = r"<\|.*\|>"
