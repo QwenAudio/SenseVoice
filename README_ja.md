@@ -246,19 +246,23 @@ export SENSEVOICE_DEVICE=cuda:0
 fastapi run --port 50000
 ```
 
-### 公式 Docker イメージ
-
-公式の `linux/amd64` ランタイムイメージは GitHub Container Registry で公開されます。モデル重みはイメージに含まれず、初回起動時にマウントした `/models` キャッシュへダウンロードされます。
+### Docker でビルド
 
 ```bash
-docker pull ghcr.io/qwenaudio/sensevoice:latest
-docker run --rm --gpus all \
-  -p 50000:50000 \
-  -v sensevoice-models:/models \
-  ghcr.io/qwenaudio/sensevoice:latest
+docker build -t sensevoice .
 ```
 
-コンテナが healthy になったら `http://127.0.0.1:50000/docs` を開いてください。リリースタグと不変の `sha-<commit>` タグは[コンテナパッケージ](https://github.com/QwenAudio/SenseVoice/pkgs/container/sensevoice)で確認できます。CPU モードでは `-e SENSEVOICE_DEVICE=cpu` を追加し、`--gpus all` を削除します。
+> ビルド workflow は `ghcr.io/qwenaudio/sensevoice` も公開しますが、現在この
+> パッケージは private です。匿名 pull は HTTP 401 になるため、[コンテナパッケージ](https://github.com/QwenAudio/SenseVoice/pkgs/container/sensevoice)
+> が Public と表示されるまでは上記のローカルビルドを使用してください。
+
+### 実行（GPU、デフォルト）
+
+```bash
+docker run --rm --gpus all -p 50000:50000 -v sensevoice-models:/models sensevoice
+```
+
+コンテナが healthy になったら `http://127.0.0.1:50000/docs` を開いてください。CPU モードでは `-e SENSEVOICE_DEVICE=cpu` を追加し、`--gpus all` を削除します。
 
 ## 微調整
 
