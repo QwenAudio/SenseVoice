@@ -70,6 +70,8 @@ We compared the performance of multilingual speech recognition between SenseVoic
 
 Due to the current lack of widely-used benchmarks and methods for speech emotion recognition, we conducted evaluations across various metrics on multiple test sets and performed a comprehensive comparison with numerous results from recent benchmarks. The selected test sets encompass data in both Chinese and English, and include multiple styles such as performances, films, and natural conversations. Without finetuning on the target data, SenseVoice was able to achieve and exceed the performance of the current best speech emotion recognition models.
 
+For a reproducible zero-shot CASIA or RAVDESS rerun, use the [SER evaluation contract](./benchmarks/ser/README.md). It reads the raw SenseVoice emotion tag and reports both UA and WA instead of deriving labels from formatted transcription text.
+
 <div align="center">  
 <img src="image/ser_table.png" width="1000" />
 </div>

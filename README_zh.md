@@ -71,6 +71,8 @@ SenseVoice 是具有音频理解能力的音频基础模型，包括语音识别
 
 由于目前缺乏被广泛使用的情感识别测试指标和方法，我们在多个测试集的多种指标进行测试，并与近年来 Benchmark 上的多个结果进行了全面的对比。所选取的测试集同时包含中文 / 英文两种语言以及表演、影视剧、自然对话等多种风格的数据，在不进行目标数据微调的前提下，SenseVoice 能够在测试数据上达到和超过目前最佳情感识别模型的效果。
 
+需要复现零训练的 CASIA 或 RAVDESS 结果时，请使用 [SER 评测契约](./benchmarks/ser/README.md)。该脚本直接读取 SenseVoice 原始情感标签，同时输出 UA 和 WA；不要从富文本转写结果中用字符串切分推断情感标签。
+
 <div align="center">  
 <img src="image/ser_table.png" width="1000" />
 </div>
