@@ -31,30 +31,11 @@ def test_readmes_surface_sensevoice_gguf_edge_path():
             assert link in text
 
 
-def test_readmes_surface_funasr_1327_language_metadata_release():
+def test_readmes_surface_current_funasr_release():
     required = [
-        "funasr==1.3.27",
-        "verbose_json.language",
-        "https://github.com/modelscope/FunASR/releases/tag/v1.3.27",
-    ]
-    guides = {
-        "README.md": "https://www.funasr.com/en/blog/funasr-v1-3-27-language-metadata-vllm-fallback.html",
-        "README_zh.md": "https://www.funasr.com/blog/funasr-v1-3-27-language-metadata-vllm-fallback.html",
-        "README_ja.md": "https://www.funasr.com/en/blog/funasr-v1-3-27-language-metadata-vllm-fallback.html",
-    }
-    for relpath, guide in guides.items():
-        text = (ROOT / relpath).read_text()
-        for marker in [*required, guide]:
-            assert marker in text, f"{relpath} is missing {marker}"
-
-
-def test_readmes_surface_funasr_1329_vad_sentence_timestamps():
-    required = [
-        "funasr==1.3.29",
-        "sentence_info",
-        "VAD",
-        "https://github.com/modelscope/FunASR/releases/tag/v1.3.29",
-        "https://pypi.org/project/funasr/1.3.29/",
+        "funasr==1.4.14",
+        "https://github.com/modelscope/FunASR/releases/tag/v1.4.14",
+        "https://github.com/QwenAudio/SenseVoice/releases",
     ]
     for relpath in ["README.md", "README_zh.md", "README_ja.md"]:
         text = (ROOT / relpath).read_text()

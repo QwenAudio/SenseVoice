@@ -46,15 +46,11 @@ Online Demo:
 
 <a name="What's News"></a>
 # What's New 🔥
-- 2026/07: **FunASR 1.3.29 restores SenseVoice VAD segment timestamps** — when token timestamps and a punctuation model are unavailable, `sentence_timestamp=True` now returns every VAD region through `sentence_info`, so subtitle and clipping clients receive usable segment boundaries instead of an empty timeline. Install with `pip install -U "funasr==1.3.29"`. [Release notes](https://github.com/modelscope/FunASR/releases/tag/v1.3.29) · [PyPI](https://pypi.org/project/funasr/1.3.29/)
-- 2026/07: **FunASR 1.3.27 adds detected-language metadata for SenseVoice** — the OpenAI-compatible endpoint now reports detected `zh`, `en`, `yue`, `ja`, or `ko` in `verbose_json.language`. Install with `pip install -U "funasr==1.3.27"`. [Release notes](https://github.com/modelscope/FunASR/releases/tag/v1.3.27) · [API guide](https://www.funasr.com/en/blog/funasr-v1-3-27-language-metadata-vllm-fallback.html) · [PyPI](https://pypi.org/project/funasr/1.3.27/)
-- 2026/06: **SenseVoice on llama.cpp / GGUF** — run it on CPU/edge as a single self-contained binary (whisper.cpp-style), built-in VAD, no Python at runtime. The q8 model is only ~254 MB with the same accuracy. [runtime/llama.cpp/](./runtime/llama.cpp/) · [Releases](https://github.com/QwenAudio/SenseVoice/releases) · [GGUF on Hugging Face](https://huggingface.co/FunAudioLLM/SenseVoiceSmall-GGUF)
-- 2026/05: FunASR can compose SenseVoiceSmall with separate FSMN-VAD, CAM++, and punctuation models to produce per-sentence speaker labels. Diarization is not a native SenseVoiceSmall checkpoint output. Requires installing FunASR from source: `pip install git+https://github.com/modelscope/FunASR.git`
-- 2024/11: Add support for timestamp based on the CTC alignment.
-- 2024/7: Added Export Features for [ONNX](./demo_onnx.py) and [libtorch](./demo_libtorch.py), as well as Python Version Runtimes: [funasr-onnx-0.4.0](https://pypi.org/project/funasr-onnx/), [funasr-torch-0.1.1](https://pypi.org/project/funasr-torch/)
-- 2024/7: The [SenseVoice-Small](https://www.modelscope.cn/models/iic/SenseVoiceSmall) voice understanding model is open-sourced, which offers high-precision multilingual speech recognition, emotion recognition, and audio event detection capabilities for Mandarin, Cantonese, English, Japanese, and Korean and leads to exceptionally low inference latency.  
-- 2024/7: The CosyVoice for natural speech generation with multi-language, timbre, and emotion control. CosyVoice excels in multi-lingual voice generation, zero-shot voice generation, cross-lingual voice cloning, and instruction-following capabilities. [CosyVoice repo](https://github.com/QwenAudio/CosyVoice) and [CosyVoice space](https://www.modelscope.cn/studios/iic/CosyVoice-300M).
-- 2024/7: [FunASR](https://github.com/modelscope/FunASR) is a fundamental speech recognition toolkit that offers a variety of features, including speech recognition (ASR), Voice Activity Detection (VAD), Punctuation Restoration, Language Models, Speaker Verification, Speaker Diarization and multi-talker ASR.
+- **Current deployment path:** install `funasr==1.4.14` for SenseVoice Python, OpenAI-compatible service, and container workflows. [Release notes](https://github.com/modelscope/FunASR/releases/tag/v1.4.14) · [SenseVoice releases](https://github.com/QwenAudio/SenseVoice/releases)
+- **Long audio without VAD:** `long_audio_no_vad.py` uses bounded overlapping windows and preserves raw chunk outputs, so hour-scale recordings do not require one unbounded GPU allocation. [Run it ->](./long_audio_no_vad.py)
+- **Integrated diarization alternative:** the wider FunASR ecosystem supports OpenMOSS/MOSS-Transcribe-Diarize for offline transcription, timestamps, and anonymous speaker labels without composing external VAD and speaker models. [Deployment guide ->](https://www.funasr.com/en/deploy/moss-transcribe-diarize.html)
+
+> See [Releases](https://github.com/QwenAudio/SenseVoice/releases) for the complete version history.
 
 <a name="Benchmarks"></a>
 # Benchmarks 📝

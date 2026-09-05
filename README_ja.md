@@ -19,7 +19,7 @@ SenseVoiceは、音声認識（ASR）、言語識別（LID）、音声感情認�
 ｜<a href="#联系我们"> お問い合わせ </a>
 </h4>
 
-モデルリポジトリ：[modelscope](https://www.modelscope.cn/models/iic/SenseVoiceSmall)，[huggingface](https://huggingface.co/FunAudioLLM/SenseVoiceSmall)，[GGUF](https://huggingface.co/FunAudioLLM/SenseVoiceSmall-GGUF)
+モデルリポジトリ：[modelscope](https://www.modelscope.cn/models/iic/SenseVoiceSmall)，[huggingface](https://huggingface.co/FunAudioLLM/SenseVoiceSmall)，[GGUF](https://huggingface.co/FunAudioLLM/SenseVoiceSmall-GGUF)，[llama.cpp ガイド](https://www.funasr.com/llama-cpp.html)
 
 オンライン体験：
 [modelscope demo](https://www.modelscope.cn/studios/iic/SenseVoice), [huggingface space](https://huggingface.co/spaces/FunAudioLLM/SenseVoice)
@@ -41,14 +41,11 @@ SenseVoiceは、音声認識（ASR）、言語識別（LID）、音声感情認�
 
 <a name="最新动态"></a>
 # 最新情報 🔥
-- 2026/07: **FunASR 1.3.29 で SenseVoice の VAD 区間タイムスタンプを復元** — token タイムスタンプと句読点モデルがない場合でも、`sentence_timestamp=True` は各 VAD 音声区間を `sentence_info` で返すようになり、字幕やクリッピングのクライアントが空のタイムラインではなく利用可能な区間境界を取得できます。`pip install -U "funasr==1.3.29"` でインストールできます。[リリースノート](https://github.com/modelscope/FunASR/releases/tag/v1.3.29) · [PyPI](https://pypi.org/project/funasr/1.3.29/)
-- 2026/07: **FunASR 1.3.27 で SenseVoice の検出言語メタデータを追加** — OpenAI 互換エンドポイントが、検出した `zh`、`en`、`yue`、`ja`、`ko` を `verbose_json.language` に返すようになりました。`pip install -U "funasr==1.3.27"` でインストールできます。[リリースノート](https://github.com/modelscope/FunASR/releases/tag/v1.3.27) · [API ガイド](https://www.funasr.com/en/blog/funasr-v1-3-27-language-metadata-vllm-fallback.html) · [PyPI](https://pypi.org/project/funasr/1.3.27/)
-- 2026/06: **SenseVoice on llama.cpp / GGUF** — CPU/エッジ端末で単一の自己完結バイナリとして実行できます（whisper.cpp 風、内蔵 VAD、Python 不要）。q8 モデルは約 254 MB で精度を維持します。[runtime/llama.cpp/](./runtime/llama.cpp/) · [Releases](https://github.com/QwenAudio/SenseVoice/releases) · [funasr.com/llama-cpp](https://www.funasr.com/llama-cpp.html) · [Hugging Face GGUF](https://huggingface.co/FunAudioLLM/SenseVoiceSmall-GGUF)
-- 2026/05: FunASRはSenseVoiceSmallに独立したFSMN-VAD、CAM++、句読点モデルを組み合わせ、文単位の話者ラベルを生成できます。話者分離はSenseVoiceSmall checkpointのネイティブ出力ではありません。
-- 2024/7：新しく[ONNX](./demo_onnx.py)と[libtorch](./demo_libtorch.py)のエクスポート機能を追加し、Pythonバージョンのランタイム：[funasr-onnx-0.4.0](https://pypi.org/project/funasr-onnx/)、[funasr-torch-0.1.1](https://pypi.org/project/funasr-torch/)も提供開始。
-- 2024/7: [SenseVoice-Small](https://www.modelscope.cn/models/iic/SenseVoiceSmall) 多言語音声理解モデルがオープンソース化されました。中国語、広東語、英語、日本語、韓国語の多言語音声認識、感情認識、およびイベント検出能力をサポートし、非常に低い推論遅延を実現しています。
-- 2024/7: CosyVoiceは自然な音声生成に取り組んでおり、多言語、音色、感情制御をサポートします。多言語音声生成、ゼロショット音声生成、クロスランゲージ音声クローン、および指示に従う能力に優れています。[CosyVoice repo](https://github.com/QwenAudio/CosyVoice) and [CosyVoice オンライン体験](https://www.modelscope.cn/studios/iic/CosyVoice-300M).
-- 2024/7: [FunASR](https://github.com/modelscope/FunASR) は、音声認識（ASR）、音声活動検出（VAD）、句読点復元、言語モデル、話者検証、話者分離、およびマルチトーカーASRなどの機能を提供する基本的な音声認識ツールキットです。
+- **現在のデプロイ経路：** `funasr==1.4.14` をインストールすると、SenseVoice の Python、OpenAI 互換サービス、コンテナ workflow を利用できます。[リリースノート](https://github.com/modelscope/FunASR/releases/tag/v1.4.14) · [SenseVoice Releases](https://github.com/QwenAudio/SenseVoice/releases)
+- **VAD なしの長時間音声：** `long_audio_no_vad.py` は有界の重複ウィンドウと raw chunk 出力を使うため、時間単位の録音を一度にモデルへ渡す必要がありません。[スクリプト ->](./long_audio_no_vad.py)
+- **統合 diarization の選択肢：** FunASR ecosystem は OpenMOSS/MOSS-Transcribe-Diarize をサポートし、オフラインで転写、タイムスタンプ、匿名話者ラベルを返します。[デプロイガイド ->](https://www.funasr.com/en/deploy/moss-transcribe-diarize.html)
+
+> 完全なバージョン履歴は [Releases](https://github.com/QwenAudio/SenseVoice/releases) を参照してください。
 
 <a name="Benchmarks"></a>
 # ベンチマーク 📝

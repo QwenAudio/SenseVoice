@@ -46,14 +46,11 @@ SenseVoice 是具有音频理解能力的音频基础模型，包括语音识别
 
 # 最新动态 🔥
 
-- 2026/07：**FunASR 1.3.29 恢复 SenseVoice 的 VAD 分段时间戳** — 当模型没有 token 时间戳且未配置标点模型时，`sentence_timestamp=True` 现在会通过 `sentence_info` 返回每个 VAD 语音区域，让字幕与智能剪辑客户端获得可用的分段边界，而不再收到空时间线。安装命令：`pip install -U "funasr==1.3.29"`。[发布说明](https://github.com/modelscope/FunASR/releases/tag/v1.3.29) · [PyPI](https://pypi.org/project/funasr/1.3.29/)
-- 2026/07：**FunASR 1.3.27 为 SenseVoice 增加检测语种元数据** — OpenAI 兼容接口现在会在 `verbose_json.language` 中返回检测到的 `zh`、`en`、`yue`、`ja` 或 `ko`。安装命令：`pip install -U "funasr==1.3.27"`。[发布说明](https://github.com/modelscope/FunASR/releases/tag/v1.3.27) · [接口指南](https://www.funasr.com/blog/funasr-v1-3-27-language-metadata-vllm-fallback.html) · [PyPI](https://pypi.org/project/funasr/1.3.27/)
-- 2026/06: **SenseVoice 支持 llama.cpp / GGUF**，可在 CPU/边缘端以单个自包含二进制运行（类似 whisper.cpp），内置 VAD，运行时无需 Python。q8 模型约 254 MB，精度保持一致。[runtime/llama.cpp/](./runtime/llama.cpp/) · [Releases](https://github.com/QwenAudio/SenseVoice/releases) · [Hugging Face GGUF](https://huggingface.co/FunAudioLLM/SenseVoiceSmall-GGUF)
-- 2026/05: FunASR 可将 SenseVoiceSmall 与独立的 FSMN-VAD、CAM++ 和标点模型组合，生成逐句说话人标签；说话人分离并非 SenseVoiceSmall checkpoint 的原生输出。需从源码安装 FunASR：`pip install git+https://github.com/modelscope/FunASR.git`
-- 2024/7：新增加导出 [ONNX](./demo_onnx.py) 与 [libtorch](./demo_libtorch.py) 功能，以及 python 版本 runtime：[funasr-onnx-0.4.0](https://pypi.org/project/funasr-onnx/)，[funasr-torch-0.1.1](https://pypi.org/project/funasr-torch/)
-- 2024/7: [SenseVoice-Small](https://www.modelscope.cn/models/iic/SenseVoiceSmall) 多语言音频理解模型开源，支持中、粤、英、日、韩语的多语言语音识别，情感识别和事件检测能力，具有极低的推理延迟。。
-- 2024/7: CosyVoice 致力于自然语音生成，支持多语言、音色和情感控制，擅长多语言语音生成、零样本语音生成、跨语言语音克隆以及遵循指令的能力。[CosyVoice repo](https://github.com/QwenAudio/CosyVoice) and [CosyVoice 在线体验](https://www.modelscope.cn/studios/iic/CosyVoice-300M).
-- 2024/7: [FunASR](https://github.com/modelscope/FunASR) 是一个基础语音识别工具包，提供多种功能，包括语音识别（ASR）、语音端点检测（VAD）、标点恢复、语言模型、说话人验证、说话人分离和多人对话语音识别等。
+- **当前部署路径：** 安装 `funasr==1.4.14`，即可使用 SenseVoice 的 Python、OpenAI 兼容服务与容器工作流。[发布说明](https://github.com/modelscope/FunASR/releases/tag/v1.4.14) · [SenseVoice Releases](https://github.com/QwenAudio/SenseVoice/releases)
+- **长音频无需 VAD：** `long_audio_no_vad.py` 使用有界重叠窗口并保留原始 chunk 输出，小时级录音不必一次送入模型占用无界显存。[运行脚本 ->](./long_audio_no_vad.py)
+- **一体化说话人标注：** 更广泛的 FunASR 生态已接入 OpenMOSS/MOSS-Transcribe-Diarize，离线输出转写、时间戳和匿名说话人标签，不需要业务侧手工拼 VAD 与 speaker 模型。[部署指南 ->](https://www.funasr.com/deploy/moss-transcribe-diarize.html)
+
+> 完整版本历史请查看 [Releases](https://github.com/QwenAudio/SenseVoice/releases)。
 
 <a name="Benchmarks"></a>
 
