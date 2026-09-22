@@ -47,17 +47,22 @@ def test_readmes_surface_orca_sensevoice_desktop_integration():
     required_links = [
         "https://github.com/stablyai/orca",
         "https://github.com/stablyai/orca/pull/7436",
-        "https://github.com/stablyai/orca/releases/tag/v1.4.159-rc.1",
+        "https://github.com/stablyai/orca/releases/tag/v1.4.206",
     ]
-    prerelease_markers = {
-        "README.md": "prerelease",
-        "README_zh.md": "预发布",
-        "README_ja.md": "プレリリース",
+    release_markers = {
+        "README.md": ("stable release", "Download the SenseVoice model", "non-streaming"),
+        "README_zh.md": ("稳定版", "先下载 SenseVoice 模型", "非流式"),
+        "README_ja.md": ("安定版", "SenseVoice モデルをダウンロード", "非ストリーミング"),
     }
-    for relpath, prerelease_marker in prerelease_markers.items():
+    for relpath, markers in release_markers.items():
         text = (ROOT / relpath).read_text()
-        for marker in ["Orca", "SenseVoice", *required_links, prerelease_marker]:
-            assert marker in text, f"{relpath} is missing {marker}"
+        orca_lines = [line for line in text.splitlines() if line.startswith("- [Orca]")]
+        assert len(orca_lines) == 1, f"{relpath} must have one Orca entry"
+        entry = orca_lines[0]
+        for marker in ["Orca", "SenseVoice", *required_links, *markers]:
+            assert marker in entry, f"{relpath} is missing {marker} in its Orca entry"
+        assert "v1.4.159-rc.1" not in entry
+        assert "v1.4.158" not in entry
 
 
 def test_readme_relative_markdown_links_point_to_existing_files():
