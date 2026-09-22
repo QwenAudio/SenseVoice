@@ -54,9 +54,12 @@ model = AutoModel(
 )
 ```
 
-For the FastAPI server:
+For the FastAPI server, also install the CLI dependencies. The base `fastapi`
+package in `requirements.txt` does not include the `fastapi` command's optional
+dependencies:
 
 ```bash
+python -m pip install "fastapi[standard]"
 export SENSEVOICE_DEVICE=cpu
 fastapi run --port 50000
 ```
