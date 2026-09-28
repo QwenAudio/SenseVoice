@@ -23,6 +23,7 @@ def ctc_forced_align(
         blank_id (int, optional): The index of blank symbol in CTC emission. (Default: 0)
         ignore_id (int, optional): The index of ignore symbol in CTC emission. (Default: -1)
     """
+    targets = targets.clone()
     targets[targets == ignore_id] = blank
 
     batch_size, input_time_size, _ = log_probs.size()
@@ -53,12 +54,19 @@ def ctc_forced_align(
     backpointers = torch.zeros((batch_size, input_time_size, padded_t), device=log_probs.device, dtype=targets.dtype)
 
     for t in range(1, input_time_size):
+        # Frames past input_lengths must not move that item's score.
+        active = t < input_lengths
+        if active.ndim == 0:
+            active = active.view(1)
         prev = torch.stack(
             (best_score[:, 2:], best_score[:, 1:-1], torch.where(diff_labels, best_score[:, :-2], neg_inf))
         )
         prev_max_value, prev_max_idx = prev.max(dim=0)
-        best_score[:, padding_num:] = log_probs[:, t].gather(-1, _t_a_r_g_e_t_s_) + prev_max_value
-        backpointers[:, t, padding_num:] = prev_max_idx
+        updated = log_probs[:, t].gather(-1, _t_a_r_g_e_t_s_) + prev_max_value
+        best_score[:, padding_num:] = torch.where(active.unsqueeze(-1), updated, best_score[:, padding_num:])
+        backpointers[:, t, padding_num:] = torch.where(
+            active.unsqueeze(-1), prev_max_idx, backpointers[:, t, padding_num:]
+        )
 
     l1l2 = best_score.gather(
         -1, torch.stack((padding_num + target_lengths * 2 - 1, padding_num + target_lengths * 2), dim=-1)
@@ -68,9 +76,13 @@ def ctc_forced_align(
     path[bsz_indices, input_lengths - 1] = padding_num + target_lengths * 2 - 1 + l1l2.argmax(dim=-1)
 
     for t in range(input_time_size - 1, 0, -1):
+        active = t < input_lengths
+        if active.ndim == 0:
+            active = active.view(1)
         target_indices = path[:, t]
         prev_max_idx = backpointers[bsz_indices, t, target_indices]
-        path[:, t - 1] += target_indices - prev_max_idx
+        step = target_indices - prev_max_idx
+        path[:, t - 1] = torch.where(active, step, path[:, t - 1])
 
     alignments = _t_a_r_g_e_t_s_.gather(dim=-1, index=(path - padding_num).clamp(min=0))
     return alignments
