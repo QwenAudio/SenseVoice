@@ -37,11 +37,13 @@ class CtcAlignmentTests(unittest.TestCase):
         self.assertEqual(targets.tolist(), [[1, -1]])
 
     def test_an_unequal_length_batch_matches_each_item_cropped(self):
-        torch.manual_seed(0)
-        emissions = torch.randn(3, 9, 5).log_softmax(-1)
-        targets = torch.tensor([[1, 2], [2, 1], [3, 3]])
-        input_lengths = torch.tensor([9, 6, 4])
-        target_lengths = torch.tensor([2, 2, 2])
+        frames = torch.tensor(_FRAMES)
+        extra = torch.tensor([[0.0, -8.0, -8.0, -8.0, -8.0]])
+        padded = torch.cat([frames, extra])
+        emissions = torch.stack([padded, padded])
+        targets = torch.tensor([[1, 1], [1, 1]])
+        input_lengths = torch.tensor([5, 6])
+        target_lengths = torch.tensor([2, 2])
         batched = ctc_forced_align(emissions, targets, input_lengths, target_lengths)
         for i, length in enumerate(input_lengths.tolist()):
             single = ctc_forced_align(
