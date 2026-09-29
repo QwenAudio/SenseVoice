@@ -28,6 +28,8 @@ def ctc_forced_align(
 
     batch_size, input_time_size, _ = log_probs.size()
     bsz_indices = torch.arange(batch_size, device=input_lengths.device)
+    # The frame masks are combined with score tensors, so keep them on that device.
+    mask_lengths = input_lengths.to(log_probs.device)
 
     _t_a_r_g_e_t_s_ = torch.cat(
         (
@@ -55,7 +57,7 @@ def ctc_forced_align(
 
     for t in range(1, input_time_size):
         # Frames past input_lengths must not move that item's score.
-        active = t < input_lengths
+        active = t < mask_lengths
         if active.ndim == 0:
             active = active.view(1)
         prev = torch.stack(
@@ -76,7 +78,7 @@ def ctc_forced_align(
     path[bsz_indices, input_lengths - 1] = padding_num + target_lengths * 2 - 1 + l1l2.argmax(dim=-1)
 
     for t in range(input_time_size - 1, 0, -1):
-        active = t < input_lengths
+        active = t < mask_lengths
         if active.ndim == 0:
             active = active.view(1)
         target_indices = path[:, t]

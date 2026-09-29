@@ -19,6 +19,7 @@ on:
       - tests/test_docker_context.sh
       - tests/test_device_env.py
       - tests/test_model_timestamps.py
+      - tests/test_ctc_alignment.py
       - utils/ctc_alignment.py
   push:
     branches:
@@ -42,6 +43,7 @@ on:
       - tests/test_docker_context.sh
       - tests/test_device_env.py
       - tests/test_model_timestamps.py
+      - tests/test_ctc_alignment.py
       - utils/ctc_alignment.py
   workflow_dispatch:
 
@@ -68,7 +70,7 @@ jobs:
       - name: Install CPU PyTorch for model contracts
         run: python -m pip install torch==2.12.1 --index-url https://download.pytorch.org/whl/cpu
       - name: Validate module and timestamp contracts
-        run: python -m unittest tests.test_model_timestamps -v
+        run: python -m unittest tests.test_model_timestamps tests.test_ctc_alignment -v
 
   build:
     needs: contract

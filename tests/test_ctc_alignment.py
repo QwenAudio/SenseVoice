@@ -36,6 +36,38 @@ class CtcAlignmentTests(unittest.TestCase):
         ctc_forced_align(emissions, targets, torch.tensor([3]), torch.tensor([2]))
         self.assertEqual(targets.tolist(), [[1, -1]])
 
+    def test_an_unequal_length_batch_matches_each_item_cropped(self):
+        torch.manual_seed(0)
+        emissions = torch.randn(3, 9, 5).log_softmax(-1)
+        targets = torch.tensor([[1, 2], [2, 1], [3, 3]])
+        input_lengths = torch.tensor([9, 6, 4])
+        target_lengths = torch.tensor([2, 2, 2])
+        batched = ctc_forced_align(emissions, targets, input_lengths, target_lengths)
+        for i, length in enumerate(input_lengths.tolist()):
+            single = ctc_forced_align(
+                emissions[i : i + 1, :length], targets[i : i + 1], torch.tensor([length]), target_lengths[i : i + 1]
+            )
+            self.assertEqual(batched[i, :length].tolist(), single[0].tolist())
+
+    def test_lengths_on_the_cpu_work_with_emissions_on_an_accelerator(self):
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            self.skipTest("needs an accelerator")
+        torch.manual_seed(0)
+        emissions = torch.randn(2, 7, 5).log_softmax(-1)
+        targets = torch.tensor([[1, 2], [2, 1]])
+        input_lengths = torch.tensor([7, 5])
+        target_lengths = torch.tensor([2, 2])
+        expected = ctc_forced_align(emissions, targets, input_lengths, target_lengths)
+        aligned = ctc_forced_align(
+            emissions.to(device), targets.to(device), input_lengths, target_lengths.to(device)
+        )
+        self.assertEqual(aligned.cpu()[0].tolist(), expected[0].tolist())
+        self.assertEqual(aligned.cpu()[1, :5].tolist(), expected[1, :5].tolist())
+
 
 if __name__ == "__main__":
     unittest.main()
