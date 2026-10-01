@@ -6,7 +6,9 @@ Thank you for your interest in contributing to SenseVoice! This guide will help 
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.12 is recommended for this guide. The current `torch>=2.12.1` requirement
+  needs Python 3.10 or newer; Python 3.8 and 3.9 cannot satisfy the current
+  dependency set.
 - Git
 - (Optional) CUDA-compatible GPU for faster inference
 
@@ -29,7 +31,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 3. **Install dependencies:**
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 4. **Verify the installation:**
@@ -43,6 +45,8 @@ python -c "from funasr import AutoModel; print('Installation successful')"
 If you don't have a GPU, you can run SenseVoice on CPU by setting the device to `"cpu"`:
 
 ```python
+from funasr import AutoModel
+
 model = AutoModel(
     model="iic/SenseVoiceSmall",
     trust_remote_code=True,
@@ -50,9 +54,12 @@ model = AutoModel(
 )
 ```
 
-For the FastAPI server:
+For the FastAPI server, also install the CLI dependencies. The base `fastapi`
+package in `requirements.txt` does not include the `fastapi` command's optional
+dependencies:
 
 ```bash
+python -m pip install "fastapi[standard]"
 export SENSEVOICE_DEVICE=cpu
 fastapi run --port 50000
 ```
@@ -127,12 +134,17 @@ SenseVoice/
 
 ## Understanding the Model
 
-SenseVoice is a non-autoregressive encoder-only model that outputs:
+The released SenseVoiceSmall checkpoint is a non-autoregressive encoder-only model that outputs:
 
-- **Speech transcription** (ASR) across 50+ languages
+- **Speech transcription** (ASR) for Mandarin, Cantonese, English, Japanese, and Korean
 - **Emotion labels**: `HAPPY`, `SAD`, `ANGRY`, `NEUTRAL`, `FEARFUL`, `DISGUSTED`, `SURPRISED`
 - **Audio event labels**: `BGM`, `Speech`, `Applause`, `Laughter`, `Cry`, `Sneeze`, `Breath`, `Cough`
 - **Language identification** for Mandarin, English, Cantonese, Japanese, and Korean
+
+The broader SenseVoice research reports support for more than 50 languages; that is
+not the language support of the released SenseVoiceSmall checkpoint. See the
+[README](./README.md) for the distinction between research scope and released
+capabilities.
 
 The model uses a SANM (Self-Attention with Normalized Memory) encoder architecture with CTC decoding. Emotion and event labels are predicted from the first 4 encoder output tokens, while the remaining tokens produce the transcription.
 
