@@ -2,8 +2,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OFFICIAL_CLARIFICATION = (
-    "https://github.com/QwenAudio/SenseVoice/issues/334#issuecomment-5083546605"
+CONFIRMATION_FOLLOWUP = (
+    "https://github.com/QwenAudio/SenseVoice/issues/334#issuecomment-5463240506"
 )
 IMMUTABLE_MODEL_LICENSE = (
     "https://github.com/modelscope/FunASR/blob/"
@@ -11,40 +11,43 @@ IMMUTABLE_MODEL_LICENSE = (
 )
 
 
-def test_readmes_surface_official_sensevoicesmall_commercial_use_clarification():
+def test_readmes_surface_pending_license_owner_confirmation():
     expected_markers = {
         "README.md": [
             "Agreement v1.1",
-            "Commercial use of the official SenseVoiceSmall weights is permitted",
-            "when the model license is followed",
-            "Section 3 is a responsibility and risk disclaimer",
-            "fine-tuned derivative weights may remain private",
-            "Section 2.2 attribution and model-name requirements",
-            "official weights only",
-            "third-party conversions and bundled artifacts separately",
+            "remain open",
+            "license-owner/core-maintainer confirmation",
+            "not be treated as final confirmation",
         ],
         "README_zh.md": [
             "模型开源协议 v1.1",
-            "允许商业使用官方 SenseVoiceSmall 权重",
-            "遵守模型协议时",
-            "第 3 节属于责任和风险免责声明",
-            "微调后的衍生权重可以保持私有",
-            "第 2.2 节的署名和模型名称要求",
-            "仅适用于官方权重",
-            "第三方转换版本和打包制品仍需分别核对",
+            "仍未关闭",
+            "许可方/核心维护者确认",
+            "不应将早期回复视为最终确认",
         ],
     }
 
     for relpath, markers in expected_markers.items():
         text = (ROOT / relpath).read_text()
-        assert OFFICIAL_CLARIFICATION in text, (
-            f"{relpath} is missing the official license clarification"
+        assert CONFIRMATION_FOLLOWUP in text, (
+            f"{relpath} is missing the pending-confirmation follow-up"
         )
         assert IMMUTABLE_MODEL_LICENSE in text, (
             f"{relpath} is missing the immutable v1.1 model license"
         )
         for marker in markers:
             assert marker in text, f"{relpath} is missing: {marker}"
+
+
+def test_readmes_do_not_present_the_earlier_reply_as_final_authorization():
+    english = (ROOT / "README.md").read_text()
+    chinese = (ROOT / "README_zh.md").read_text()
+    assert "official SenseVoiceSmall license clarification" not in english
+    assert "Commercial use of the official SenseVoiceSmall weights is permitted" not in english
+    assert "fine-tuned derivative weights may remain private" not in english
+    assert "SenseVoiceSmall 官方许可澄清" not in chinese
+    assert "允许商业使用官方 SenseVoiceSmall 权重" not in chinese
+    assert "微调后的衍生权重可以保持私有" not in chinese
 
 
 def test_license_clarification_keeps_code_and_weight_terms_distinct():
