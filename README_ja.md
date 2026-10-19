@@ -62,6 +62,8 @@ SenseVoiceは、音声認識（ASR）、言語識別（LID）、音声感情認�
 
 現在、広く使用されている感情認識のテスト指標と方法が不足しているため、複数のテストセットでさまざまな指標をテストし、最近のベンチマークの複数の結果と包括的に比較しました。選択されたテストセットには、中国語/英語の両方の言語と、パフォーマンス、映画、自然な会話などのさまざまなスタイルのデータが含まれています。ターゲットデータの微調整を行わない前提で、SenseVoiceはテストデータで現在の最良の感情認識モデルの効果を達成および上回ることができました。
 
+再現可能なゼロショットの CASIA / RAVDESS 再実行には、[SER 評価コントラクト](./benchmarks/ser/README.md) を使用してください。整形済みの転記テキストからラベルを導出するのではなく、SenseVoice の生の感情タグを読み取り、UA と WA の両方を報告します。
+
 <div align="center">  
 <img src="image/ser_table.png" width="1000" />
 </div>
@@ -102,7 +104,7 @@ SenseVoiceSmall のサンプルと FunASR の話者分離パイプラインに�
 
 ## 推論
 
-任意の形式の音声入力をサポートし、任意の長さの入力をサポートします。
+一般的な音声形式に対応しています。長時間の録音は、エンコーダへ送る前に分割する必要があります。以下の例では、その分割に FSMN-VAD を使用します。
 
 ```python
 from funasr import AutoModel
@@ -148,6 +150,19 @@ print(text)
 - `ban_emo_unk`：emo_unkラベルを無効にする。
 </details>
 
+### VAD なしの長時間音声
+
+1 時間級の波形を 1 回の `model.generate` 呼び出しに渡すと、音声ファイルのサイズを大きく上回るエンコーダ メモリが消費されることがあります。VAD の使用が許容できない場合は、メモリ使用量を抑えたリファレンス スクリプトを使用してください。このスクリプトは ffmpeg でデコードし、2 秒のオーバーラップ付きの固定 30 秒ウィンドウで SenseVoice を実行します。VAD モデルは設定しません:
+
+```bash
+python long_audio_no_vad.py meeting.mp3 \
+  --output meeting.txt \
+  --window-seconds 30 \
+  --overlap-seconds 2
+```
+
+結合後の文字起こしは、隣接するウィンドウ境界間で完全に一致する重複テキストのみを削除します。`meeting.chunks.jsonl` にはすべての生のモデル応答とウィンドウ オフセットが保持されるため、一致しない出力が暗黙的に破棄されることはありません。`--no-dedupe` を指定すると、完全一致の重複削除自体を無効化できます。ウィンドウ オフセットは入力の境界を示すものであり、単語のタイムスタンプではありません。この経路は録音全体を一括処理する際のエンコーダ OOM を回避しますが、固定境界の切断箇所付近では認識結果が変化する可能性があります。内容に基づく分割で差し支えなければ、上記の VAD パイプラインが引き続き推奨されるデフォルトです。
+
 すべての入力が短い音声（30秒未満）であり、バッチ推論が必要な場合、推論効率を向上させるためにVADモデルを削除し、`batch_size`を設定できます。
 
 ```python
@@ -187,6 +202,17 @@ res = m.inference(
 text = rich_transcription_postprocess(res[0][0]["text"])
 print(text)
 ```
+
+### CPU / エッジでの実行 — llama.cpp / GGUF（GPU 不要、Python 不要）
+
+SenseVoice を **単一の自己完結バイナリ** として実行できます。これは SenseVoice にとって、[whisper.cpp](https://github.com/ggml-org/whisper.cpp) と Whisper の関係に相当するもので、特に中国語と広東語の認識精度が大幅に優れています。FSMN-VAD 内蔵、実行時に Python は不要です。
+
+```bash
+bash download-funasr-model.sh sensevoice ./gguf
+llama-funasr-sensevoice -m ./gguf/SenseVoiceSmall-f16.gguf --vad ./gguf/fsmn-vad.gguf -a audio.wav
+```
+
+**プリビルドバイナリ:** [Releases](../../releases) · **ダウンロードとクイックスタート:** [funasr.com/llama-cpp](https://www.funasr.com/llama-cpp.html) · **GGUF:** [Hugging Face](https://huggingface.co/FunAudioLLM/SenseVoiceSmall-GGUF) · **ドキュメントとベンチマーク:** [runtime/llama.cpp/](./runtime/llama.cpp/)
 
 ## サービス展開
 
