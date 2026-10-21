@@ -22,6 +22,15 @@
 #include "ggml-cuda.h"
 #include "gguf.h"
 
+#include <ctime>
+
+// WebSocket socket read timeout, seconds. cpp-httplib applies
+// CPPHTTPLIB_WEBSOCKET_READ_TIMEOUT_SECOND to every upgraded connection; routing it
+// through a runtime variable makes it follow --ws-idle-timeout-s (+2 s backstop after the
+// close frame) instead of holding a connection slot for 300 s.
+static time_t g_ws_idle_timeout_s = 60;
+#define CPPHTTPLIB_WEBSOCKET_READ_TIMEOUT_SECOND (g_ws_idle_timeout_s)
+
 #define FUNASR_AUDIO_IMPLEMENTATION
 #include "funasr_audio.h"
 #include "funasr_vad.h"
@@ -32,10 +41,12 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -134,7 +145,7 @@ static void add_posenc(std::vector<float>&x,int T,int depth){
     x[(size_t)t*depth+i]+=(float)sin(st);x[(size_t)t*depth+depth/2+i]+=(float)cos(st);}}
 }
 
-struct sv_out { std::string text; std::vector<std::string> tags; std::string language; };
+struct sv_out { std::string text; std::vector<std::string> tags; std::string language; bool aborted=false; };
 static std::string sv_trim(const std::string&s){size_t a=s.find_first_not_of(' ');if(a==std::string::npos)return "";size_t b=s.find_last_not_of(' ');return s.substr(a,b-a+1);}
 static bool sv_is_lang(const std::string&t){
     static const std::vector<std::string> L={
@@ -251,8 +262,12 @@ struct SenseVoice {
 #endif
     }
 
-    sv_out transcribe_fb(const std::vector<float>& fb,int T,bool keep_tags){
+    // abort_cb (optional, CPU backend only) is polled by ggml between graph nodes; when it
+    // returns true the forward stops early and an empty result with aborted=true is returned.
+    sv_out transcribe_fb(const std::vector<float>& fb,int T,bool keep_tags,
+                         ggml_abort_callback abort_cb=nullptr,void* abort_data=nullptr){
         std::lock_guard<std::mutex> lk(dec);
+        if(abort_cb && abort_cb(abort_data)){ sv_out o; o.aborted=true; return o; }
         const int D=m.c.d_model;
         int N=nq+T; std::vector<float> inp((size_t)N*F);
         for(int i=0;i<nq;i++) memcpy(&inp[(size_t)i*F], emb_qtok.data()+(size_t)i*F, (size_t)F*sizeof(float));
@@ -280,8 +295,14 @@ struct SenseVoice {
         ggml_cgraph*gf=ggml_new_graph_custom(c,32768,false); ggml_build_forward_expand(gf,logits);
         ggml_gallocr_t ga=ggml_gallocr_new(buft); ggml_gallocr_alloc_graph(ga,gf);
         ggml_backend_tensor_set(x,inp.data(),0,ggml_nbytes(x));
-        if(!is_gpu) ggml_backend_cpu_set_n_threads(be,nthreads);
-        if(ggml_backend_graph_compute(be,gf)!=GGML_STATUS_SUCCESS){fprintf(stderr,"sensevoice: compute failed\n");}
+        if(!is_gpu){ ggml_backend_cpu_set_n_threads(be,nthreads); ggml_backend_cpu_set_abort_callback(be,abort_cb,abort_data); }
+        ggml_status st=ggml_backend_graph_compute(be,gf);
+        if(st==GGML_STATUS_ABORTED){
+            ggml_gallocr_free(ga); ggml_free(c);
+            if(!is_gpu) ggml_backend_free(be);
+            sv_out o; o.aborted=true; return o;
+        }
+        if(st!=GGML_STATUS_SUCCESS){fprintf(stderr,"sensevoice: compute failed\n");}
         std::vector<float> lg((size_t)V*N); ggml_backend_tensor_get(logits,lg.data(),0,ggml_nbytes(logits));
         std::vector<int> seg_ids; int prev=-1;
         for(int n=0;n<N;n++){ const float*col=&lg[(size_t)n*V]; int am=0; float best=col[0];
@@ -292,11 +313,12 @@ struct SenseVoice {
         return emit_ids ? sv_out{} : detok_sv_full(seg_ids,vocab,keep_tags);
     }
 
-    sv_out transcribe_wav(const std::vector<float>& wav,bool keep_tags){
+    sv_out transcribe_wav(const std::vector<float>& wav,bool keep_tags,
+                          ggml_abort_callback abort_cb=nullptr,void* abort_data=nullptr){
         if((int)wav.size()<WINLEN) return sv_out{};
         int T=0; auto fb=compute_fbank(wav,T);
         if(T<1) return sv_out{};
-        return transcribe_fb(fb,T,keep_tags);
+        return transcribe_fb(fb,T,keep_tags,abort_cb,abort_data);
     }
 };
 
@@ -351,6 +373,10 @@ struct VadStream {
 
     int idim=400,pd=128,nl=4,lorder=20,od=248,lm=5,ln=1;
     int nthreads=8, max_seg_ms=30000;
+    // Soft split (streaming only): once the open segment is longer than soft_seg frames,
+    // end it at the first pause of soft_sil frames instead of waiting for the full
+    // end-of-turn silence (~1.85 s) or the hard --vad-maxseg cut. 0 disables.
+    int soft_seg=0, soft_sil=0;
 
     std::vector<float> wav;               // accumulated 16k mono f32 samples
     int stepped=0;                        // frames already pushed through the SM
@@ -527,6 +553,10 @@ struct VadStream {
                 csil++;
                 if(st_sm==1){
                     if(csil>=max_end_sil){ emit(cstart, t-end_lookback); reset_sm(); }
+                    else if(soft_seg>0 && csil>=soft_sil && t-cstart+1>soft_seg){
+                        // keep the same 100 ms speech tail the regular end-point keeps
+                        emit(cstart, t-csil+lookahead_end); reset_sm();
+                    }
                     else if(t-cstart+1>max_seg){ emit(cstart,t); reset_sm(); }
                 }
             }
@@ -594,6 +624,8 @@ struct ServerCtx {
     SenseVoice sv;
     std::string vad_path;
     int nthreads=8, partial_ms=400, vad_maxseg=30000, vad_slot_ms=2000;
+    int vad_soft_ms=10000, vad_soft_sil_ms=200;   // streaming soft split (see VadStream)
+    int ws_idle_ms=60000;                         // 0 = no idle close
     size_t max_session_samples=(size_t)FS*300;
     bool keep_tags=false;
     std::atomic<int> connections{0};
@@ -641,47 +673,138 @@ struct ServerCtx {
 // ===========================================================================
 class WsSession {
 public:
-    explicit WsSession(ServerCtx& ctx): ctx_(ctx){ last_activity_ms_ = now_ms(); }
+    explicit WsSession(ServerCtx& ctx): ctx_(ctx){ last_rx_ms_ = now_ms(); }
 
+    // Threading: the connection thread (this one) only reads frames and queues them, so
+    // a close/EOF/reset from the client is seen immediately even while a decode is in
+    // flight. A per-session worker thread does all VAD and model work. On disconnect the
+    // worker is cancelled (queued audio dropped, an in-flight forward aborted through the
+    // ggml abort callback) and joined, so the connection slot is released right away
+    // instead of after the whole backlog has been transcribed for nobody.
     void run(httplib::ws::WebSocket& ws){
         send(ws, "{\"type\":\"session.created\",\"session\":{\"id\":\"sess_1\",\"object\":\"realtime.session\",\"model\":\"sensevoice\"}}");
+        std::thread worker([this,&ws]{ work(ws); });
         std::string msg;
-        long long last_pump = now_ms();
         for(;;){
             auto r = ws.read(msg);
-            if(r==httplib::ws::ReadResult::Fail) break;   // close / error
-            if(r==httplib::ws::ReadResult::Binary){
-                if(!append_raw_pcm16(msg)){
-                    send(ws, ev("error", "\"message\":\"session audio limit exceeded\""));
-                    clear();
-                    ws.close(httplib::ws::CloseStatus::MessageTooBig, "session audio limit exceeded");
-                    break;
-                }
-                pump(ws); continue;
+            if(r==httplib::ws::ReadResult::Fail) break;   // close / error / idle timeout
+            if(overflow_){
+                ws.close(httplib::ws::CloseStatus::MessageTooBig, "session audio limit exceeded");
+                break;
             }
-            std::string type = json_field(msg,"type");
-            if(type=="session.update")        on_session_update(msg);
-            else if(type=="input_audio_buffer.append"){ on_append(ws, msg); }
-            else if(type=="input_audio_buffer.commit"){ commit(ws); }
-            else if(type=="input_audio_buffer.clear"){ clear(); }
-            // response.create / response.cancel / conversation.* : accepted, ignored
-            long long t = now_ms();
-            if(t - last_pump >= 100){ pump(ws); last_pump = t; }
+            last_rx_ms_ = now_ms();
+            bool binary = r==httplib::ws::ReadResult::Binary;
+            std::string type = binary ? std::string() : json_field(msg,"type");
+            {
+                std::lock_guard<std::mutex> lk(q_mu_);
+                if(type=="input_audio_buffer.commit") commits_queued_++;
+                q_.push_back(InMsg{binary, std::move(type), std::move(msg)});
+            }
+            q_cv_.notify_one();
+            msg.clear();
         }
-        finalize_all(ws);
+        {
+            std::lock_guard<std::mutex> lk(q_mu_);
+            closed_ = true;
+            q_.clear();
+        }
+        q_cv_.notify_one();
+        worker.join();
     }
 
 private:
+    struct InMsg { bool binary; std::string type; std::string data; };
+
     ServerCtx& ctx_;
+    // reader -> worker queue
+    std::mutex q_mu_;
+    std::condition_variable q_cv_;
+    std::deque<InMsg> q_;
+    std::atomic<bool> closed_{false};      // client gone (or send failed): stop all work
+    std::atomic<bool> overflow_{false};    // audio limit hit: reader closes on next frame
+    std::atomic<long> commits_queued_{0};  // commits read so far
+    std::atomic<long> commits_done_{0};    // commits handled by the worker
+    std::atomic<long long> last_rx_ms_{0}; // arrival time of the last client message
+    long long last_work_ms_ = 0;          // worker: end of the last batch it processed
+    long long partial_gap_ms_ = 0;         // adaptive partial cadence (>= --partial-ms)
+
+    // ggml abort callbacks: a final decode only stops when the client is gone; a partial
+    // also yields to a pending commit so the end-of-turn transcript is never queued behind it.
+    static bool abort_final(void* d){ return static_cast<WsSession*>(d)->closed_.load(); }
+    static bool abort_partial(void* d){
+        auto* s = static_cast<WsSession*>(d);
+        return s->closed_.load() || s->commits_queued_.load()!=s->commits_done_.load();
+    }
+
+    void work(httplib::ws::WebSocket& ws){
+        std::deque<InMsg> batch;
+        while(!closed_){
+            {
+                std::unique_lock<std::mutex> lk(q_mu_);
+                q_cv_.wait_for(lk, std::chrono::milliseconds(100), [&]{ return closed_.load() || !q_.empty(); });
+                if(closed_) break;
+                batch.swap(q_);
+            }
+            // Drain everything that arrived while the previous decode ran. The VAD is
+            // still stepped once per received chunk, exactly as before (its scores
+            // depend on chunk size), but no partial is decoded until the queue is empty.
+            for(auto& m: batch){
+                if(closed_ || overflow_) break;
+                if(m.binary){
+                    if(!append_raw_pcm16(m.data)){ on_overflow(ws); break; }
+                    pump(ws, false);
+                    continue;
+                }
+                if(m.type=="session.update")        on_session_update(m.data);
+                else if(m.type=="input_audio_buffer.append"){
+                    if(!on_append(m.data)){ on_overflow(ws); break; }
+                    pump(ws, false);
+                }
+                else if(m.type=="input_audio_buffer.commit"){ commit(ws); commits_done_++; }
+                else if(m.type=="input_audio_buffer.clear"){ clear(); }
+                // response.create / response.cancel / conversation.* : accepted, ignored
+            }
+            if(!batch.empty()) last_work_ms_ = now_ms();
+            batch.clear();
+            if(closed_ || overflow_) break;
+            if(ctx_.ws_idle_ms>0 &&
+               now_ms()-std::max(last_rx_ms_.load(), last_work_ms_) >= ctx_.ws_idle_ms){
+                // Client sent nothing for --ws-idle-timeout-s (counted from its last message
+                // or from the end of the work it queued, whichever is later, so a slow final
+                // decode never counts as client idleness): close with a proper close
+                // frame (1001 "idle timeout"). The worker initiates it because the reader
+                // is blocked in read(); the reader returns once the handshake completes.
+                fprintf(stderr,"[ws] idle timeout, closing session\n");
+                ws.close(httplib::ws::CloseStatus::GoingAway, "idle timeout");
+                closed_ = true;
+                break;
+            }
+            // Partials only run when no newer input is waiting, i.e. at most one partial
+            // is ever in flight and it always covers the latest audio.
+            bool idle;
+            { std::lock_guard<std::mutex> lk(q_mu_); idle = q_.empty(); }
+            pump(ws, idle);
+        }
+    }
+
+    void on_overflow(httplib::ws::WebSocket& ws){
+        send(ws, ev("error", "\"message\":\"session audio limit exceeded\""));
+        clear();
+        overflow_ = true;   // the reader thread closes the socket (it owns reads)
+    }
+
     std::vector<float> samples_;         // session audio, 16k mono f32
     std::unique_ptr<VadStream> vad_;
     bool vad_on_ = true;
     std::string last_partial_;
     long long last_partial_ms_ = 0;
     size_t last_partial_sample_ = 0;    // samples_ size at last partial, for new-audio gating
-    long long last_activity_ms_ = 0;    // steady-clock ms of last audible (non-quiet) chunk
+    size_t quiet_samples_ = 0;          // audio (samples) received since the last audible chunk
 
-    void send(httplib::ws::WebSocket& ws, const std::string& msg){ ws.send(msg); }
+    void send(httplib::ws::WebSocket& ws, const std::string& msg){
+        if(closed_) return;
+        if(!ws.send(msg)) closed_ = true;   // peer gone: stop decoding for nobody
+    }
     std::string ev(const std::string& type, const std::string& extra){
         if(extra.empty()) return "{\"type\":"+json_str(type)+"}";
         return "{\"type\":"+json_str(type)+","+extra+"}";
@@ -697,18 +820,13 @@ private:
         // input_audio_format pcm16 is assumed
     }
 
-    void on_append(httplib::ws::WebSocket& ws, const std::string& p){
+    // returns false when the session audio limit is exceeded
+    bool on_append(const std::string& p){
         std::string b64 = json_field(p,"audio");
-        if(b64.empty()) return;
+        if(b64.empty()) return true;
         std::string raw;
-        if(!base64_decode(b64, raw) || raw.empty()){ fprintf(stderr,"[ws] bad base64\n"); return; }
-        if(!append_raw_pcm16(raw)){
-            send(ws, ev("error", "\"message\":\"session audio limit exceeded\""));
-            clear();
-            ws.close(httplib::ws::CloseStatus::MessageTooBig, "session audio limit exceeded");
-            return;
-        }
-        pump(ws);
+        if(!base64_decode(b64, raw) || raw.empty()){ fprintf(stderr,"[ws] bad base64\n"); return true; }
+        return append_raw_pcm16(raw);
     }
 
     bool append_raw_pcm16(const std::string& raw){
@@ -726,7 +844,7 @@ private:
         // cleanup below can retire a connection that stopped talking.
         double e=0;
         for(size_t i=0;i<n;i++) e += (double)samples_[off+i]*samples_[off+i];
-        if(sqrt(e/(double)n) >= QUIET_RMS) last_activity_ms_ = now_ms();
+        if(sqrt(e/(double)n) >= QUIET_RMS) quiet_samples_ = 0; else quiet_samples_ += n;
         return true;
     }
 
@@ -736,6 +854,8 @@ private:
         vad_.reset(new VadStream());
         vad_->nthreads = ctx_.nthreads;
         vad_->max_seg_ms = ctx_.vad_maxseg;
+        vad_->soft_seg = ctx_.vad_soft_ms>0 ? ctx_.vad_soft_ms/vad_->FR : 0;
+        vad_->soft_sil = std::max(1, ctx_.vad_soft_sil_ms/vad_->FR);
         if(!vad_->load(ctx_.vad_path.c_str())){ vad_.reset(); fprintf(stderr,"[ws] VAD load failed; single-turn mode\n"); return; }
         if(!samples_.empty()) vad_->feed(samples_.data(), samples_.size());
     }
@@ -745,24 +865,30 @@ private:
         ensure_vad();
     }
 
-    // pump/finalize are called from the connection's own read-loop thread.
-    void pump(httplib::ws::WebSocket& ws){
+    // pump/commit run on the session worker thread.
+    void pump(httplib::ws::WebSocket& ws, bool allow_partial){
         feed_state();
         if(vad_ && vad_on_){
             // Expected time slot expired: no audible chunk within vad_slot_ms.
             // Commit any still-open segment, then drop the VAD buffers and the
             // session audio so the connection parks until new chunks arrive.
+            // Measured in received audio (quiet samples), plus wall clock only when
+            // nothing at all has arrived: the worker's own decode time must not count,
+            // or a slow decode turns ordinary pauses into a forced end-point and the
+            // clear() below throws away audio that was not stepped through the VAD yet.
             long long t = now_ms();
-            if(t - last_activity_ms_ >= ctx_.vad_slot_ms){
+            bool quiet = quiet_samples_ >= (size_t)ctx_.vad_slot_ms*16;
+            bool silent_client = allow_partial && t - last_rx_ms_.load() >= ctx_.vad_slot_ms;
+            if(quiet || silent_client){
                 auto evs = vad_->finalize();
                 for(auto&e: evs) if(e.type==VAD_SEGMENT) finalize_segment(ws, e.start_ms, e.end_ms);
                 vad_->clear();
                 samples_.clear();
                 last_partial_.clear(); last_partial_ms_=0; last_partial_sample_=0;
-                last_activity_ms_ = t;
+                quiet_samples_ = 0;
             }
         }
-        if(!vad_ || !vad_on_){ maybe_partial(ws); return; }
+        if(!vad_ || !vad_on_){ if(allow_partial) maybe_partial(ws); return; }
         auto evs = vad_->step_all();
         for(auto&e: evs){
             if(e.type==VAD_SPEECH_START){
@@ -774,7 +900,7 @@ private:
                 trim_after_segment();
             }
         }
-        maybe_partial(ws);
+        if(allow_partial) maybe_partial(ws);
     }
 
     // Drop audio that is no longer reachable (everything before the last finalized
@@ -792,7 +918,7 @@ private:
     void maybe_partial(httplib::ws::WebSocket& ws){
         if(!vad_ || !vad_->in_speech()) return;
         long long t = now_ms();
-        if(t - last_partial_ms_ < ctx_.partial_ms) return;
+        if(t - last_partial_ms_ < std::max<long long>(ctx_.partial_ms, partial_gap_ms_)) return;
         // Skip the full re-encode when essentially no new audio arrived since the
         // last partial (avoids burning CPU re-transcribing a static window).
         size_t new_audio = samples_.size()>last_partial_sample_ ? samples_.size()-last_partial_sample_ : 0;
@@ -804,7 +930,11 @@ private:
         if(end>(int)samples_.size()) end=(int)samples_.size();
         if(end-off<WINLEN) return;
         std::vector<float> seg(samples_.begin()+off, samples_.begin()+end);
-        auto r = ctx_.sv.transcribe_wav(seg,false);
+        auto r = ctx_.sv.transcribe_wav(seg,false,abort_partial,this);
+        // Keep partials to <= ~50% duty so long open segments cannot starve VAD and
+        // final decodes (or a co-located service) on small CPUs.
+        partial_gap_ms_ = 2*(now_ms()-t);
+        if(r.aborted) return;
         std::string delta;
         if(r.text.size()>last_partial_.size() &&
            r.text.compare(0, last_partial_.size(), last_partial_)==0){
@@ -825,7 +955,8 @@ private:
         if(end>(int)samples_.size())end=(int)samples_.size();
         if(end-off<WINLEN) return;
         std::vector<float> seg(samples_.begin()+off, samples_.begin()+end);
-        auto r = ctx_.sv.transcribe_wav(seg,false);
+        auto r = ctx_.sv.transcribe_wav(seg,false,abort_final,this);
+        if(r.aborted) return;
         last_partial_.clear();
         std::string item_id = "it_"+std::to_string(sms);
         send(ws, ev("input_audio_buffer.committed",""));
@@ -843,7 +974,7 @@ private:
             // no VAD / manual mode: transcribe everything accumulated
             if((int)samples_.size()>=WINLEN){
                 finalize_segment(ws, 0, (int)(samples_.size()/16));
-                samples_.clear(); last_partial_.clear();
+                samples_.clear(); last_partial_.clear(); last_partial_sample_=0;
             }
             return;
         }
@@ -854,19 +985,8 @@ private:
 
     void clear(){
         samples_.clear(); last_partial_.clear(); last_partial_ms_=0; last_partial_sample_=0;
-        last_activity_ms_ = now_ms();
+        quiet_samples_ = 0;
         if(vad_) vad_->clear();
-    }
-
-    void finalize_all(httplib::ws::WebSocket& ws){
-        if(vad_ && vad_on_){
-            auto evs = vad_->finalize();
-            for(auto&e: evs) if(e.type==VAD_SEGMENT) finalize_segment(ws, e.start_ms, e.end_ms);
-            trim_after_segment();
-        } else {
-            if((int)samples_.size()>=WINLEN)
-                finalize_segment(ws, 0, (int)(samples_.size()/16));
-        }
     }
 };
 
@@ -894,6 +1014,12 @@ static void usage(const char* a0){
 "      --web <dir>        serve a static directory at / (mic webui; open http://host:port/)\n"
 "      --max-connections <N> maximum active WebSocket clients (default 4)\n"
 "      --max-audio-seconds <N> maximum decoded REST audio or buffered WS audio (default 300)\n"
+"      --ws-idle-timeout-s <N> close a realtime session (close frame 1001 \"idle timeout\")\n"
+"                         after N s without a client message; frees the slot of clients that\n"
+"                         stopped sending or vanished without a FIN (default 60; 0 = off)\n"
+"      --vad-soft-split-ms <ms> streaming: once an open segment is longer than this, end it\n"
+"                         at the next short pause (default 10000; 0 = off)\n"
+"      --vad-soft-sil-ms <ms> pause length for the soft split (default 200)\n"
 "  -h, --help             show this help\n"
 "\n"
 "Positional:\n"
@@ -911,7 +1037,8 @@ static void usage(const char* a0){
 int main(int argc, char** argv){
     std::string model_path, vad_path, webdir, host="127.0.0.1";
     int port=8040, threads=8, partial_ms=400, vad_maxseg=30000, vad_slot_ms=2000, read_timeout_s=300;
-    int max_connections=4, max_audio_seconds=300;
+    int max_connections=4, max_audio_seconds=300, ws_idle_timeout_s=60;
+    int vad_soft_ms=10000, vad_soft_sil_ms=200;
     int ngl=0;
     bool keep_tags=false;
     std::vector<std::string> pos;
@@ -931,6 +1058,9 @@ int main(int argc, char** argv){
         else if(a=="--read-timeout-s") read_timeout_s=atoi(take("--read-timeout-s"));
         else if(a=="--max-connections"||a=="--max-conn") max_connections=atoi(take(a.c_str()));
         else if(a=="--max-audio-seconds") max_audio_seconds=atoi(take("--max-audio-seconds"));
+        else if(a=="--ws-idle-timeout-s") ws_idle_timeout_s=atoi(take("--ws-idle-timeout-s"));
+        else if(a=="--vad-soft-split-ms") vad_soft_ms=atoi(take("--vad-soft-split-ms"));
+        else if(a=="--vad-soft-sil-ms") vad_soft_sil_ms=atoi(take("--vad-soft-sil-ms"));
         else if(a=="--keep-tags") keep_tags=true;
         else if(!a.empty() && a[0]=='-'){ fprintf(stderr,"unknown option %s\n",a.c_str()); return 1; }
         else pos.push_back(a);
@@ -947,6 +1077,8 @@ int main(int argc, char** argv){
     ServerCtx ctx;
     ctx.nthreads=threads; ctx.partial_ms=partial_ms; ctx.vad_maxseg=vad_maxseg;
     ctx.vad_slot_ms=vad_slot_ms;
+    ctx.vad_soft_ms=vad_soft_ms<0?0:vad_soft_ms; ctx.vad_soft_sil_ms=vad_soft_sil_ms<10?10:vad_soft_sil_ms;
+    ctx.ws_idle_ms=ws_idle_timeout_s>0 ? ws_idle_timeout_s*1000 : 0;
     ctx.max_session_samples=(size_t)FS*(size_t)max_audio_seconds;
     ctx.keep_tags=keep_tags; ctx.vad_path=vad_path;
 
@@ -970,6 +1102,14 @@ int main(int argc, char** argv){
     svr.set_read_timeout(read_timeout_s, 0);
     svr.set_write_timeout(read_timeout_s, 0);
     svr.set_keep_alive_max_count(8);
+    // The session worker sends the 1001 "idle timeout" close frame at N s; the socket read
+    // timeout (N+2 s, no frame at all incl. pongs) then ends the connection even if the peer
+    // never completes the close handshake or vanished without a FIN.
+    // Pings (answered by any live client's WebSocket stack) keep the read timeout from
+    // firing on a quiet but alive client, e.g. one waiting for a long final decode.
+    g_ws_idle_timeout_s = ws_idle_timeout_s>0 ? ws_idle_timeout_s+2 : 300;
+    if(ws_idle_timeout_s>0)
+        svr.set_websocket_ping_interval(std::min<time_t>(30, std::max<time_t>(1, ws_idle_timeout_s/3)));
 
     svr.Get("/health", [](const httplib::Request&, httplib::Response& res){
         res.set_content("{\"status\":\"ok\"}", "application/json");
