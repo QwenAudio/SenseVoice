@@ -27,13 +27,29 @@ sensevoice-server -m model/sensevoice-small-q8.gguf -vad model/fsmn-vad.gguf [ho
   always stay on CPU.
 - `--keep-tags`    keep `<|lang|>/<|emo|>/<|event|>` meta tokens in text
 - `--threads <N>`  ggml compute threads (default 8)
-- `--partial-ms <N>`  WS partial-transcription cadence, ms (default 400)
+- `--partial-ms <N>`  minimum WS partial-transcription cadence, ms (default 400). Partials
+  are decoded on a per-session worker thread, only when no newer audio is queued, and
+  at most every 2x the previous partial's decode time, so long utterances on small
+  CPUs degrade the caption refresh rate instead of building an ever-growing backlog.
 - `--vad-maxseg <ms>` max single VAD segment (default 30000)
 - `--vad-slot-ms <ms>`  idle slot: when no audible chunk arrives within this window the
-  VAD buffers are finalized and reset until new chunks come in (default 2000).
+  VAD buffers are finalized and reset until new chunks come in (default 2000). Measured
+  in received (quiet) audio, or wall clock only while the client sends nothing, so the
+  server's own decode time never forces an end-point.
+- `--vad-soft-split-ms <ms>` streaming only: once an open VAD segment is longer than this,
+  end it at the next pause of `--vad-soft-sil-ms` (default 10000 / 200; `0` = off). The
+  regular end-point needs ~1.85 s of silence, so continuous speech otherwise only splits
+  at the hard `--vad-maxseg` cut (30 s, often mid-word), which costs accuracy.
   Prevents a connected-but-idle session (mic live, nobody talking) from keeping the
   VAD busy re-scoring quiet chunks.
-- `--read-timeout-s <N>` socket read timeout, s (default 300)
+- `--read-timeout-s <N>` HTTP socket read timeout, s (default 300)
+- `--ws-idle-timeout-s <N>` close a realtime session when the client sends no message for
+  N s (default 60; `0` = off), counted from its last message or from the end of the work it
+  queued (a long final decode is not idleness): the server sends a close frame
+  `1001 "idle timeout"` and the slot is free once the handshake completes. Server pings
+  (every min(30, N/3) s) keep live clients' sockets active; a peer that answers nothing for
+  N+2 s is dropped. A client that closes or resets the connection frees its slot
+  immediately: pending audio is dropped and an in-flight decode aborted.
 - `--max-connections <N>` maximum active WebSocket clients (default 4;
   accepted range 1 to 128)
 - `--max-audio-seconds <N>` maximum decoded audio per REST request and maximum
