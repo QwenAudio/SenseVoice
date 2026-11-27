@@ -109,20 +109,14 @@ function renderInterim() {
                const c = document.createElement("span"); c.className = "cursor"; l.append(t, c); }
 }
 function commit(text) {
-  const finalText = text || known;
+  const finalText = text ?? known;
   known = "";
+  if (!finalText) { renderInterim(); return; }
   const l = ensureInterim();
   l.classList.remove("interim"); l.classList.add("final");
-  l.textContent = finalText || "";
+  l.textContent = finalText;
   ensureInterim();                                  // fresh line for the next sentence
   transcript.scrollTop = transcript.scrollHeight;
-}
-
-// The server sends either a suffix (prefix-stable) or the revised full text.
-function merge(knownText, delta) {
-  if (!delta) return knownText;
-  if (delta.startsWith(knownText)) return delta;    // full-text revision
-  return knownText + delta;                         // suffix append
 }
 
 function handleMsg(raw) {
@@ -141,7 +135,7 @@ function handleMsg(raw) {
       badge("bd_vad", "vad: idle"); setStatus("speech stopped");
       break;
     case "conversation.item.input_audio_transcription.delta":
-      known = merge(known, m.delta || "");
+      known = typeof m.transcript === "string" ? m.transcript : known + (m.delta || "");
       renderInterim();
       break;
     case "input_audio_buffer.committed":
@@ -149,7 +143,7 @@ function handleMsg(raw) {
       break;
     case "conversation.item.input_audio_transcription.completed":
       speaking = false; badge("bd_vad", "vad: idle");
-      commit(m.transcript || "");
+      commit(m.transcript);
       setStatus("line committed");
       log("final: " + (m.transcript || "").slice(0, 60));
       break;

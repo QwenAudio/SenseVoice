@@ -160,6 +160,17 @@ inline std::string json_escape(const std::string &input) {
 
 inline std::string json_str(const std::string &input) { return "\"" + json_escape(input) + "\""; }
 
+inline std::string format_transcription_delta(const std::string &item_id,
+                                               const std::string &previous,
+                                               const std::string &text) {
+    if (text == previous) return {};
+    const std::string delta = text.compare(0, previous.size(), previous) == 0
+                                  ? text.substr(previous.size())
+                                  : text;
+    return "{\"type\":\"conversation.item.input_audio_transcription.delta\",\"item_id\":" + json_str(item_id) +
+           ",\"delta\":" + json_str(delta) + ",\"transcript\":" + json_str(text) + "}";
+}
+
 inline std::string json_field(const std::string &input, const std::string &wanted_key) {
     size_t pos = detail::skip_ws(input, 0);
     if (pos >= input.size() || input[pos++] != '{') return "";
