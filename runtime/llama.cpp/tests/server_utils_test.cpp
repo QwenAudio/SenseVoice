@@ -27,6 +27,23 @@ int main() {
     CHECK(json_field("{\"type\":\"session.update\"} trailing", "type").empty());
     CHECK(json_field("{\"type\":\"\\ud83d\\ude00\"}", "type") == "\xf0\x9f\x98\x80");
 
+    const auto appended = format_transcription_delta("it_0", "turn", "turn left");
+    CHECK(json_field(appended, "type") == "conversation.item.input_audio_transcription.delta");
+    CHECK(json_field(appended, "item_id") == "it_0");
+    CHECK(json_field(appended, "delta") == " left");
+    CHECK(json_field(appended, "transcript") == "turn left");
+
+    const auto revised = format_transcription_delta("it_0", "turn left", "turn right");
+    CHECK(json_field(revised, "delta") == "turn right");
+    CHECK(json_field(revised, "transcript") == "turn right");
+
+    const auto shortened = format_transcription_delta("it_0", "turn right", "turn");
+    CHECK(json_field(shortened, "delta") == "turn");
+    CHECK(json_field(shortened, "transcript") == "turn");
+    const auto cleared = format_transcription_delta("it_0", "turn right", "");
+    CHECK(cleared.find("\"transcript\":\"\"") != std::string::npos);
+    CHECK(format_transcription_delta("it_0", "turn right", "turn right").empty());
+
     std::vector<std::thread> workers;
     for (int i = 0; i < 16; ++i) {
         workers.emplace_back([] {

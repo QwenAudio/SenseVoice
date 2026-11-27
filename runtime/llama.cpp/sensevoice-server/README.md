@@ -119,15 +119,19 @@ Client protocol (OpenAI realtime transcription):
 | client → server | `input_audio_buffer.clear`  — reset the session buffer      |
 | server → client | `session.created`                                            |
 | server → client | `input_audio_buffer.speech_started/stopped` (VAD turn detection) |
-| server → client | `conversation.item.input_audio_transcription.delta` — incremental partials |
+| server → client | `conversation.item.input_audio_transcription.delta` — partial with current `transcript` |
 | server → client | `input_audio_buffer.committed`, `conversation.item.created` |
 | server → client | `conversation.item.input_audio_transcription.completed` — final `transcript` |
 
 The audio buffer is **16 kHz mono PCM16**; base64-encode every chunk and stream
 it via `input_audio_buffer.append`. FSMN-VAD runs incrementally on each chunk:
 it end-points utterances, emits `speech_started`/`speech_stopped`, and streams
-hypothesis deltas (throttled by `--partial-ms`) while speech is open. On segment
-finalization the full transcript arrives in `...transcription.completed`.
+hypothesis updates (throttled by `--partial-ms`) while speech is open. For each
+`...transcription.delta`, replace the current partial for its `item_id` with
+`transcript`. An empty `transcript` clears the partial. The `delta` field keeps
+its legacy behavior, with a suffix on extension and the revised text on a
+rewrite. On segment finalization, the final `transcript` arrives in
+`...transcription.completed`.
 
 Idle CPU: VAD only scores frames when new audio actually arrives. Chunks with no
 real signal are written straight into the score cache as silence votes without

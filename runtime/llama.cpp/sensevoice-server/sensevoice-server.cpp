@@ -50,6 +50,7 @@ static const float LN_EPS = 1e-5f;
 
 using funasr_server::base64_decode;
 using funasr_server::format_subtitles;
+using funasr_server::format_transcription_delta;
 using funasr_server::format_verbose_segments;
 using funasr_server::json_field;
 using funasr_server::json_str;
@@ -805,19 +806,10 @@ private:
         if(end-off<WINLEN) return;
         std::vector<float> seg(samples_.begin()+off, samples_.begin()+end);
         auto r = ctx_.sv.transcribe_wav(seg,false);
-        std::string delta;
-        if(r.text.size()>last_partial_.size() &&
-           r.text.compare(0, last_partial_.size(), last_partial_)==0){
-            delta = r.text.substr(last_partial_.size());
-        } else if(!r.text.empty() && r.text!=last_partial_){
-            delta = r.text;   // hypothesis revised: resend full text
-        }
-        last_partial_ = r.text;
+        auto event = format_transcription_delta("it_"+std::to_string(s), last_partial_, r.text);
+        last_partial_ = std::move(r.text);
         last_partial_sample_ = samples_.size();
-        if(delta.empty()) return;
-        std::string item_id = "it_"+std::to_string(s);
-        send(ws, ev("conversation.item.input_audio_transcription.delta",
-            "\"item_id\":"+json_str(item_id)+",\"delta\":"+json_str(delta)));
+        if(!event.empty()) send(ws, event);
     }
 
     void finalize_segment(httplib::ws::WebSocket& ws, int sms, int ems){
